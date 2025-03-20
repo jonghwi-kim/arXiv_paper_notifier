@@ -2,71 +2,127 @@
 import os
 import redis
 import logging
+import json
 from datetime import datetime, timedelta
+from typing import List, Dict, Any
 from elasticsearch import Elasticsearch
 from kakao import KakaoMessage
-from config import ELASTIC_HOST, ELASTIC_ID, ELASTIC_PASSWORD, REDIS_HOST
+from utils import get_redis_client, get_es_client
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-es_client = Elasticsearch(ELASTIC_HOST, basic_auth=(ELASTIC_ID, ELASTIC_PASSWORD))
-redis_client = redis.Redis(host=REDIS_HOST, port=6379, decode_responses=True)
-
-def get_search_keywords():
+def get_search_keywords(redis_client: redis.Redis,
+                        config: Dict[str, Any], 
+                        ) -> List[str]:
     """
-    Redis 또는 JSON 파일에서 검색 키워드 로드
-    :return: 키워드 리스트
+    Retrieves search keywords from Redis or a fallback file.
+
+    - First, attempts to retrieve stored keywords from Redis.
+    - If no keywords are found, loads them from `config.json`.
+
+    :param redis_client: Redis client instance for fetching keywords.
+    :return: List of keywords for search.
     """
     keywords = list(redis_client.smembers("search_keywords"))
     
-    if not keywords and os.path.exists("keywords.txt"):
-        with open("keywords.txt", "r") as keyword_file:
-            queries = keyword_file.readlines()
-            for query in queries:
-                keywords.append(query.strip())
+    if not keywords and config["keywords"]:
+        keywords = config["keywords"]
 
-    logger.info(f"{len(keywords)}개 키워드 쿼리 접수 ({keywords})")
+    if keywords:
+        logger.info(f"Loaded {len(keywords)} keywords: {keywords}")
+    else:
+        logger.warning("⚠️ No search keywords found.")
+    
     return keywords
 
-def send_notification():
-    """ Elasticsearch에서 논문을 검색하고, 카카오톡으로 알림 전송 """
-    kakao_msg = KakaoMessage()
-    keywords = get_search_keywords()
-    
+def search_papers(es_client: Elasticsearch, 
+                  keywords: List[str], 
+                  last_crawl_time: str
+                  ) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Queries Elasticsearch for research papers matching the given keywords.
+
+    - Uses the latest crawl timestamp from Redis to ensure up-to-date results.
+    - Filters papers by their abstract content and publication date.
+
+    :param es_client: Elasticsearch client instance.
+    :param keywords: List of search keywords.
+    :param last_crawl_time: UTC timestamp of the last successful crawl.
+    :return: Dictionary mapping keywords to lists of relevant research papers.
+    """
     if not keywords:
-        logger.warning("⚠️ 검색 키워드가 없습니다.")
-        return
+        logger.warning("⚠️ No search keywords provided.")
+        return {}
 
     notifications = {}
-    yesterday = datetime.utcnow() - timedelta(hours=24)
+    last_crawl_dt = datetime.utcnow() - timedelta(hours=24)
 
     for keyword in keywords:
         query_body = {
-            "query": {"bool": {"must": [{"match": {"abstract": keyword}}, {"range": {"published_date": {"gte": yesterday}}}]}}
+            "query": {
+                "bool": {
+                    "must": [
+                        {"match": {"abstract": keyword}},  
+                        {"range": {"published_date": {"gte": last_crawl_dt.isoformat()}}}
+                    ]
+                }
+            }
         }
+
         response = es_client.search(index="arxiv_papers", body=query_body)
-
-        ### To Do List ###
-        ### Re-Ranking Module ###
-        ### Paper Priority Algorithm ###
-        ### Summarization Module ###
-
         notifications[keyword] = [hit["_source"] for hit in response["hits"]["hits"]]
 
+    return notifications
+
+def send_notification(config: Dict[str, Any]) -> None:
+    """
+    Searches for relevant research papers and sends notifications via KakaoTalk.
+
+    - Load keywords from Redis.
+    - Queries Elasticsearch for matching papers.
+    - Sends notifications through KakaoTalk.
+
+    :param config: Configuration dictionary containing system settings.
+    """
+    redis_client = get_redis_client()
+    es_client = get_es_client()
+
+    # Initialize messenger
+    messenger_type = config.get("messenger", "kakao").lower()  # Default: KakaoTalk
+    if messenger_type == "kakao":
+        messenger = KakaoMessage(config)
+    else:
+        logger.warning(f"⚠️ Messenger '{messenger_type}' is not supported yet.")
+        return
+
+    # Load keywords and last crawl timestamp
+    keywords = get_search_keywords(redis_client, config)
+    last_crawl_time = redis_client.get("last_crawl_timestamp")  # Retrieve last crawl timestamp
+
+    # Search for relevant papers (e.g. 1st Retrieval : BM25 in Elasticsearch)
+    notifications = search_papers(es_client, keywords, last_crawl_time)
+
+    # Send notifications via the selected messenger
     for keyword, papers in notifications.items():
         if not papers:
-            logger.info(f"🔍 Keyword '{keyword}': No new papers found.")
+            logger.info(f"🔍 No new papers found for keyword: '{keyword}'")
             continue
 
-        logger.info(f"🔔 Found {len(papers)} papers for '{keyword}' from {yesterday}. Sending notifications...")
+        logger.info(f"🔔 Sending {len(papers)} notifications for '{keyword}' since {last_crawl_time}.")
 
-        # response = kakao_msg.send_paper_custom_kakao(keyword, papers)
-        response = kakao_msg.send_paper_default_kakao(keyword, papers)
-        if response.status_code == 200:
-            logger.info(f"✅ {keyword} 관련 논문 카카오톡 메시지 전송 성공!")
+        if messenger_type == "kakao":
+            response = messenger.send_paper_kakao(config, keyword, papers)  # Unified send method
         else:
-            logger.warning(f"❌ {keyword} 관련 논문 카카오톡 메시지 전송 실패: {response.json()}")
+            logger.warning(f"⚠️ Messenger '{messenger_type}' is not supported yet.")
+            return
+
+        if response.status_code == 200:
+            logger.info(f"✅ Successfully sent {messenger_type} notifications for keyword: '{keyword}'")
+        else:
+            logger.warning(f"❌ Failed to send {messenger_type} notifications for '{keyword}': {response.json()}")
 
 if __name__ == "__main__":
-    send_notification()
+    from tasks import load_config  # Import configuration loader
+    config = load_config()
+    send_notification(config)

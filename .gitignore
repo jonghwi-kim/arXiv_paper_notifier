@@ -1,5 +1,5 @@
 # .gitignore
 .env
-*.json
+kakao_access_token.json
 __pycache__
 celerybeat-schedule

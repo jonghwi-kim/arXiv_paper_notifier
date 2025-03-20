@@ -1,0 +1,14 @@
+{
+    "schedule":"20:20",
+    "time_diff":9,
+    "categories":["cs.CL", "cs.IR", "cs.AI"], 
+    "keywords":[
+        "information retrieval", 
+        "code switching", 
+        "question generation", 
+        "toxic filtering"
+    ],
+    "messenger":"kakao",
+    "template":"default_text", 
+    "template_id":118367
+}

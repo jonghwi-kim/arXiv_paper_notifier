@@ -51,7 +51,6 @@ services:
     environment:
       - ELASTICSEARCH_HOST=http://elasticsearch:9200
       - REDIS_HOST=redis
-      - KAKAO_REST_API_KEY=e4b568911a53d7ee3872dd7234e8177e
     command: ["celery", "-A", "tasks", "worker", "--loglevel=info", "-Q", "default"]
     volumes:
       - ./app:/app
@@ -72,7 +71,6 @@ services:
     environment:
       - ELASTICSEARCH_HOST=http://elasticsearch:9200
       - REDIS_HOST=redis
-      - KAKAO_REST_API_KEY=e4b568911a53d7ee3872dd7234e8177e
     command: ["celery", "-A", "tasks", "worker", "--loglevel=info", "-Q", "default"]
     volumes:
       - ./app:/app
@@ -90,7 +88,6 @@ services:
       - elasticsearch
     environment:
       - REDIS_HOST=redis
-      - KAKAO_REST_API_KEY=e4b568911a53d7ee3872dd7234e8177e
     command: ["celery", "-A", "tasks", "beat", "--loglevel=info"]
     volumes:
       - ./app:/app
