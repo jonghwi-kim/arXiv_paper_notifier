@@ -1,0 +1,6 @@
+requests
+feedparser
+elasticsearch
+celery
+redis
+python-dotenv

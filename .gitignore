@@ -1,0 +1,5 @@
+# .gitignore
+.env
+*.json
+__pycache__
+celerybeat-schedule
