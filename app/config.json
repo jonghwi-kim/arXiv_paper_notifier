@@ -1,14 +1,18 @@
 {
-    "schedule":"20:20",
+    "schedule":"8:0",
     "time_diff":9,
+    "crawl_period":48,
     "categories":["cs.CL", "cs.IR", "cs.AI"], 
     "keywords":[
         "information retrieval", 
         "code switching", 
         "question generation", 
-        "toxic filtering"
+        "mixed language",
+        "cross-language information retrieval", 
+        "search"
     ],
     "messenger":"kakao",
     "template":"default_text", 
-    "template_id":118367
+    "template_id":118367,
+    "reranker":"cross-encoder/ms-marco-MiniLM-L6-v2"
 }

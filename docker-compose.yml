@@ -28,6 +28,7 @@ services:
   redis:
     image: redis:latest
     container_name: redis
+    command: redis-server --appendonly yes --replica-read-only no
     ports:
       - "6379:6379"
     healthcheck:
@@ -51,7 +52,7 @@ services:
     environment:
       - ELASTICSEARCH_HOST=http://elasticsearch:9200
       - REDIS_HOST=redis
-    command: ["celery", "-A", "tasks", "worker", "--loglevel=info", "-Q", "default"]
+    command: ["celery", "-A", "tasks_crawler", "worker", "--loglevel=info", "-Q", "crawler"]
     volumes:
       - ./app:/app
     env_file:
@@ -71,7 +72,7 @@ services:
     environment:
       - ELASTICSEARCH_HOST=http://elasticsearch:9200
       - REDIS_HOST=redis
-    command: ["celery", "-A", "tasks", "worker", "--loglevel=info", "-Q", "default"]
+    command: ["celery", "-A", "tasks_notifier", "worker", "--loglevel=info", "-Q", "notifier"]
     volumes:
       - ./app:/app
     env_file:
@@ -88,7 +89,7 @@ services:
       - elasticsearch
     environment:
       - REDIS_HOST=redis
-    command: ["celery", "-A", "tasks", "beat", "--loglevel=info"]
+    command: ["celery", "-A", "tasks_scheduler", "beat", "--loglevel=info"]
     volumes:
       - ./app:/app
     env_file:

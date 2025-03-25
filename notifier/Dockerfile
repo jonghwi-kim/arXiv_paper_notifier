@@ -1,4 +1,4 @@
-FROM python:3.8-slim
+FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel
 
 WORKDIR /app
 
@@ -9,4 +9,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY ./app /app
 
-CMD ["celery", "-A", "app.tasks", "worker", "--loglevel=info", "-Q", "notifier"]  # Notifier Celery 워커 실행 (notifier용)
+CMD ["celery", "-A", "app.tasks", "worker", "--loglevel=info", "-Q", "notifier"]

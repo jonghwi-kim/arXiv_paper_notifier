@@ -4,4 +4,4 @@ elasticsearch
 requests
 redis
 feedparser
-PyKakao
+transformers
